@@ -11,7 +11,7 @@ from telegram.ext import (
     filters, ContextTypes, ConversationHandler,
 )
 
-BOT_TOKEN = "8426186448:AAGwsyr411H5f9rlEegnhCiXrMqk11B-eeo"
+BOT_TOKEN = "8918693256:AAEdiyWXaR7f6vG9AlZocvpLpANaQu7yidk"
 API_BASE  = "https://bdeeinedu.vercel.app/api/eiin.php"
 
 TIMEOUT   = 30
