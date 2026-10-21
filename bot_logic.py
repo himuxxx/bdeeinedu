@@ -21,6 +21,7 @@ ASK_EIIN, ASK_SEARCH = range(2)
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("eiin-bot")
 
+
 def pick(obj, *keys, default="N/A"):
     for k in keys:
         v = obj.get(k) if isinstance(obj, dict) else None
@@ -28,31 +29,31 @@ def pick(obj, *keys, default="N/A"):
             return v
     return default
 
-# ───────── FIXED FETCH FUNCTION ─────────
+
 async def fetch_eiin(eiin: str) -> dict:
     async with httpx.AsyncClient(timeout=TIMEOUT) as client:
         r = await client.get(API_BASE, params={"eiin": eiin})
         r.raise_for_status()
-        
         text = r.text.strip()
-        # PHP ওয়ার্নিং এর কারণে তৈরি হওয়া HTML ট্যাগ ফিল্টার করা
         if text.startswith("<"):
             start_idx = text.find("{")
             if start_idx != -1:
                 text = text[start_idx:]
-        
         try:
             return json.loads(text)
         except json.JSONDecodeError:
             log.error(f"Invalid JSON: {text[:200]}")
             raise Exception("API returned invalid data format.")
 
+
 def heads_of(payload):
     return (payload.get("headInfo") or {}).get("data") or []
+
 
 def emps_of(payload):
     content = (((payload.get("employeeList") or {}).get("data") or {}).get("content")) or []
     return content if isinstance(content, list) else []
+
 
 def head_card(h):
     name   = pick(h, "name", "empName", "employeeName", "fullName")
@@ -72,6 +73,7 @@ def head_card(h):
     if email  != "N/A": lines.append(f"📧 {html.escape(str(email))}")
     return "\n".join(lines), img
 
+
 def emp_card(e):
     name   = pick(e, "name", "empName", "employeeName", "fullName")
     desig  = pick(e, "designation", "designationName", "designation_name")
@@ -88,6 +90,7 @@ def emp_card(e):
     if email  != "N/A": lines.append(f"📧 {html.escape(str(email))}")
     return "\n".join(lines), img
 
+
 def main_menu(eiin, total_emps):
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("👤 Head / Principal", callback_data=f"head:{eiin}")],
@@ -97,6 +100,7 @@ def main_menu(eiin, total_emps):
         [InlineKeyboardButton("🔄 Refresh", callback_data=f"refresh:{eiin}")],
         [InlineKeyboardButton("🏠 Home", callback_data="home")],
     ])
+
 
 def emp_list_kb(eiin, emps, page):
     start = page * PAGE_SIZE
@@ -121,17 +125,25 @@ def emp_list_kb(eiin, emps, page):
     kb.append([InlineKeyboardButton("⬅️ Back", callback_data=f"menu:{eiin}")])
     return InlineKeyboardMarkup(kb)
 
+
 async def send_media(bot, chat_id, text, img, keyboard=None):
     if img:
         try:
-            return await bot.send_photo(chat_id=chat_id, photo=img, caption=text, parse_mode=ParseMode.HTML, reply_markup=keyboard)
+            return await bot.send_photo(
+                chat_id=chat_id, photo=img, caption=text,
+                parse_mode=ParseMode.HTML, reply_markup=keyboard,
+            )
         except Exception as e:
             log.warning("photo fail: %s", e)
             text = f"{text}\n\n🖼 <a href=\"{html.escape(img, quote=True)}\">View Photo</a>"
-    return await bot.send_message(chat_id=chat_id, text=text, parse_mode=ParseMode.HTML, reply_markup=keyboard)
+    return await bot.send_message(
+        chat_id=chat_id, text=text,
+        parse_mode=ParseMode.HTML, reply_markup=keyboard,
+    )
+
 
 WELCOME = (
-    "🎓 <b>EMIS EIIN Lookup Bot</b>\n\n"
+    "🎓 <b>EIIN Lookup BOT</b> 🎓\n\n"
     "Lookup any school/college by EIIN.\n"
     "View <b>Head / Principal</b> and full <b>Employee List</b>.\n\n"
     "Commands:\n"
@@ -139,60 +151,72 @@ WELCOME = (
     "• <code>/start</code> — menu\n"
 )
 
+
 def start_kb():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("🔍 Enter EIIN", callback_data="ask_eiin")],
         [InlineKeyboardButton("ℹ️ About", callback_data="about")],
     ])
 
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(WELCOME, parse_mode=ParseMode.HTML, reply_markup=start_kb())
+
 
 async def home_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
     await q.edit_message_text(WELCOME, parse_mode=ParseMode.HTML, reply_markup=start_kb())
 
+
 async def about(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
-    text = (
-        "ℹ️ <b>About</b>\n\n"
-        "Data source: <code>apps.emis.gov.bd</code>\n"
-        "Backend: <code>eiin.php</code>\n"
-        "Interface: Telegram Bot (async, Vercel webhook)\n\n"
-        "👨‍💻 Developer: @SHAKIB2016\n"
-        "📡 Telegram: @SHAKIB2016"
-    )
+    text = "👨‍💻 Developer: @SHAKIB2016"
     kb = InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="home")]])
     await q.edit_message_text(text, parse_mode=ParseMode.HTML, reply_markup=kb)
+
 
 async def prompt_eiin_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
-    await q.message.reply_text("📝 Send the <b>EIIN</b> (digits only). Example: <code>104532</code>", parse_mode=ParseMode.HTML, reply_markup=ForceReply(selective=True))
+    await q.message.reply_text(
+        "📝 Send the <b>EIIN</b> (digits only). Example: <code>104532</code>",
+        parse_mode=ParseMode.HTML, reply_markup=ForceReply(selective=True),
+    )
     return ASK_EIIN
+
 
 async def prompt_eiin_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     args = context.args
     if args and args[0].isdigit():
         await show_main_menu(update.effective_message, context, args[0])
         return ConversationHandler.END
-    await update.message.reply_text("📝 Send the <b>EIIN</b> (digits only).", parse_mode=ParseMode.HTML, reply_markup=ForceReply(selective=True))
+    await update.message.reply_text(
+        "📝 Send the <b>EIIN</b> (digits only).",
+        parse_mode=ParseMode.HTML, reply_markup=ForceReply(selective=True),
+    )
     return ASK_EIIN
+
 
 async def show_main_menu(msg, context, eiin: str):
     wait = await msg.reply_text("⏳ Fetching…")
     try:
         payload = await fetch_eiin(eiin)
     except Exception as e:
-        await wait.edit_text(f"❌ Fetch failed: <code>{html.escape(str(e))}</code>", parse_mode=ParseMode.HTML)
+        await wait.edit_text(f"❌ Fetch failed: <code>{html.escape(str(e))}</code>",
+                             parse_mode=ParseMode.HTML)
         return
     context.user_data["payload"] = payload
     context.user_data["eiin"]    = eiin
     emps = emps_of(payload)
-    text = f"🏫 <b>EIIN: {html.escape(eiin)}</b>\n👥 Employees: <b>{len(emps)}</b>\n👤 Head records: <b>{len(heads_of(payload))}</b>\n"
+    text = (
+        f"🏫 <b>EIIN: {html.escape(eiin)}</b>\n"
+        f"👥 Employees: <b>{len(emps)}</b>\n"
+        f"👤 Head records: <b>{len(heads_of(payload))}</b>\n"
+    )
     await wait.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=main_menu(eiin, len(emps)))
+
 
 async def handle_eiin_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (update.message.text or "").strip()
@@ -201,6 +225,7 @@ async def handle_eiin_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ASK_EIIN
     await show_main_menu(update.message, context, text)
     return ConversationHandler.END
+
 
 async def menu_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
@@ -213,11 +238,18 @@ async def menu_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data["payload"] = payload
             context.user_data["eiin"]    = eiin
         except Exception as e:
-            await q.edit_message_text(f"❌ <code>{html.escape(str(e))}</code>", parse_mode=ParseMode.HTML)
+            await q.edit_message_text(f"❌ <code>{html.escape(str(e))}</code>",
+                                      parse_mode=ParseMode.HTML)
             return
     emps = emps_of(payload)
-    text = f"🏫 <b>EIIN: {html.escape(eiin)}</b>\n👥 Employees: <b>{len(emps)}</b>\n👤 Head records: <b>{len(heads_of(payload))}</b>\n"
-    await q.edit_message_text(text, parse_mode=ParseMode.HTML, reply_markup=main_menu(eiin, len(emps)))
+    text = (
+        f"🏫 <b>EIIN: {html.escape(eiin)}</b>\n"
+        f"👥 Employees: <b>{len(emps)}</b>\n"
+        f"👤 Head records: <b>{len(heads_of(payload))}</b>\n"
+    )
+    await q.edit_message_text(text, parse_mode=ParseMode.HTML,
+                              reply_markup=main_menu(eiin, len(emps)))
+
 
 async def refresh_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
@@ -228,11 +260,18 @@ async def refresh_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["payload"] = payload
         context.user_data["eiin"]    = eiin
     except Exception as e:
-        await q.edit_message_text(f"❌ <code>{html.escape(str(e))}</code>", parse_mode=ParseMode.HTML)
+        await q.edit_message_text(f"❌ <code>{html.escape(str(e))}</code>",
+                                  parse_mode=ParseMode.HTML)
         return
     emps = emps_of(payload)
-    text = f"🏫 <b>EIIN: {html.escape(eiin)}</b>\n👥 Employees: <b>{len(emps)}</b>\n👤 Head records: <b>{len(heads_of(payload))}</b>\n"
-    await q.edit_message_text(text, parse_mode=ParseMode.HTML, reply_markup=main_menu(eiin, len(emps)))
+    text = (
+        f"🏫 <b>EIIN: {html.escape(eiin)}</b>\n"
+        f"👥 Employees: <b>{len(emps)}</b>\n"
+        f"👤 Head records: <b>{len(heads_of(payload))}</b>\n"
+    )
+    await q.edit_message_text(text, parse_mode=ParseMode.HTML,
+                              reply_markup=main_menu(eiin, len(emps)))
+
 
 async def head_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
@@ -244,7 +283,8 @@ async def head_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
             payload = await fetch_eiin(eiin)
             context.user_data["payload"] = payload
         except Exception as e:
-            await q.edit_message_text(f"❌ <code>{html.escape(str(e))}</code>", parse_mode=ParseMode.HTML)
+            await q.edit_message_text(f"❌ <code>{html.escape(str(e))}</code>",
+                                      parse_mode=ParseMode.HTML)
             return
     back_kb = InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data=f"menunew:{eiin}")]])
     heads = heads_of(payload)
@@ -259,6 +299,7 @@ async def head_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text, img = head_card(h)
         await send_media(context.bot, q.message.chat_id, text, img, back_kb)
 
+
 async def list_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
@@ -270,14 +311,23 @@ async def list_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
             payload = await fetch_eiin(eiin)
             context.user_data["payload"] = payload
         except Exception as e:
-            await q.edit_message_text(f"❌ <code>{html.escape(str(e))}</code>", parse_mode=ParseMode.HTML)
+            await q.edit_message_text(f"❌ <code>{html.escape(str(e))}</code>",
+                                      parse_mode=ParseMode.HTML)
             return
     emps = emps_of(payload)
     if not emps:
-        await q.edit_message_text("ℹ️ No employees found.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data=f"menu:{eiin}")]]))
+        await q.edit_message_text(
+            "ℹ️ No employees found.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data=f"menu:{eiin}")]]),
+        )
         return
-    text = f"👥 <b>Employee List</b> — EIIN <code>{html.escape(eiin)}</code>\nTotal: <b>{len(emps)}</b>\n\nTap a name to view details."
-    await q.edit_message_text(text, parse_mode=ParseMode.HTML, reply_markup=emp_list_kb(eiin, emps, page))
+    text = (
+        f"👥 <b>Employee List</b> — EIIN <code>{html.escape(eiin)}</code>\n"
+        f"Total: <b>{len(emps)}</b>\n\nTap a name to view details."
+    )
+    await q.edit_message_text(text, parse_mode=ParseMode.HTML,
+                              reply_markup=emp_list_kb(eiin, emps, page))
+
 
 async def listnew_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
@@ -290,8 +340,15 @@ async def listnew_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pass
     payload = context.user_data.get("payload")
     emps = emps_of(payload) if payload else []
-    text = f"👥 <b>Employee List</b> — EIIN <code>{html.escape(eiin)}</code>\nTotal: <b>{len(emps)}</b>\n\nTap a name to view details."
-    await context.bot.send_message(chat_id=q.message.chat_id, text=text, parse_mode=ParseMode.HTML, reply_markup=emp_list_kb(eiin, emps, page))
+    text = (
+        f"👥 <b>Employee List</b> — EIIN <code>{html.escape(eiin)}</code>\n"
+        f"Total: <b>{len(emps)}</b>\n\nTap a name to view details."
+    )
+    await context.bot.send_message(
+        chat_id=q.message.chat_id, text=text,
+        parse_mode=ParseMode.HTML, reply_markup=emp_list_kb(eiin, emps, page),
+    )
+
 
 async def emp_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
@@ -314,6 +371,7 @@ async def emp_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ])
     await send_media(context.bot, q.message.chat_id, text, img, back_kb)
 
+
 async def menunew_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
@@ -324,16 +382,28 @@ async def menunew_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pass
     payload = context.user_data.get("payload")
     emps = emps_of(payload) if payload else []
-    text = f"🏫 <b>EIIN: {html.escape(eiin)}</b>\n👥 Employees: <b>{len(emps)}</b>\n👤 Head records: <b>{len(heads_of(payload)) if payload else 0}</b>\n"
-    await context.bot.send_message(chat_id=q.message.chat_id, text=text, parse_mode=ParseMode.HTML, reply_markup=main_menu(eiin, len(emps)))
+    text = (
+        f"🏫 <b>EIIN: {html.escape(eiin)}</b>\n"
+        f"👥 Employees: <b>{len(emps)}</b>\n"
+        f"👤 Head records: <b>{len(heads_of(payload)) if payload else 0}</b>\n"
+    )
+    await context.bot.send_message(
+        chat_id=q.message.chat_id, text=text,
+        parse_mode=ParseMode.HTML, reply_markup=main_menu(eiin, len(emps)),
+    )
+
 
 async def prompt_search_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
     eiin = q.data.split(":", 1)[1]
     context.user_data["search_eiin"] = eiin
-    await q.message.reply_text("🔎 <b>Search employee</b>\nSend a name or part of a name.", parse_mode=ParseMode.HTML, reply_markup=ForceReply(selective=True))
+    await q.message.reply_text(
+        "🔎 <b>Search employee</b>\nSend a name or part of a name.",
+        parse_mode=ParseMode.HTML, reply_markup=ForceReply(selective=True),
+    )
     return ASK_SEARCH
+
 
 async def handle_search_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     eiin = context.user_data.get("search_eiin")
@@ -348,7 +418,8 @@ async def handle_search_input(update: Update, context: ContextTypes.DEFAULT_TYPE
             context.user_data["payload"] = payload
             context.user_data["eiin"]    = eiin
         except Exception as e:
-            await update.message.reply_text(f"❌ <code>{html.escape(str(e))}</code>", parse_mode=ParseMode.HTML)
+            await update.message.reply_text(f"❌ <code>{html.escape(str(e))}</code>",
+                                            parse_mode=ParseMode.HTML)
             return ConversationHandler.END
     emps = emps_of(payload)
     matches = []
@@ -359,7 +430,8 @@ async def handle_search_input(update: Update, context: ContextTypes.DEFAULT_TYPE
             matches.append((i, e))
     back_kb = InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data=f"menu:{eiin}")]])
     if not matches:
-        await update.message.reply_text(f"😕 No match for “{html.escape(query)}”.", reply_markup=back_kb)
+        await update.message.reply_text(
+            f"😕 No match for “{html.escape(query)}”.", reply_markup=back_kb)
         return ConversationHandler.END
     kb = []
     for i, e in matches[:20]:
@@ -369,8 +441,12 @@ async def handle_search_input(update: Update, context: ContextTypes.DEFAULT_TYPE
         if len(label) > 60: label = label[:57] + "..."
         kb.append([InlineKeyboardButton(label, callback_data=f"emp:{eiin}:{i}")])
     kb.append([InlineKeyboardButton("⬅️ Back", callback_data=f"menu:{eiin}")])
-    await update.message.reply_text(f"🔎 <b>{len(matches)}</b> match(es) for “{html.escape(query)}”.", parse_mode=ParseMode.HTML, reply_markup=InlineKeyboardMarkup(kb))
+    await update.message.reply_text(
+        f"🔎 <b>{len(matches)}</b> match(es) for “{html.escape(query)}”.",
+        parse_mode=ParseMode.HTML, reply_markup=InlineKeyboardMarkup(kb),
+    )
     return ConversationHandler.END
+
 
 async def raw_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
@@ -384,15 +460,19 @@ async def raw_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     buf.name = f"eiin_{eiin}.json"
     await context.bot.send_document(chat_id=q.message.chat_id, document=buf)
 
+
 async def noop(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
+
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Cancelled.")
     return ConversationHandler.END
 
+
 async def error_handler(update, context):
     log.exception("handler error", exc_info=context.error)
+
 
 def build_application() -> Application:
     app = Application.builder().token(BOT_TOKEN).build()
