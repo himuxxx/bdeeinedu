@@ -1,27 +1,25 @@
 # api/webhook.py
-# language: Python, runtime: Vercel Serverless (Python 3.12), target: Webhook handler
+# language: Python, runtime: Vercel Serverless (Python 3.12), target: webhook handler
 import os
+import sys
 import json
+import asyncio
 import logging
 from http.server import BaseHTTPRequestHandler
 
-from telegram import Update
-from telegram.ext import Application
+# make sibling bot_logic.py importable
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# import your handlers from bot_logic.py
+from telegram import Update
 from bot_logic import build_application
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("vercel-webhook")
 
-BOT_TOKEN = os.environ["BOT_TOKEN"]
-# APP is created once per cold start — reuse across warm invocations
-APP: Application = build_application(BOT_TOKEN)
+APP = build_application()  # cold-start once, reuse across warm invocations
 
 
 class handler(BaseHTTPRequestHandler):
-    """Vercel expects a class named `handler` in api/*.py."""
-
     def do_POST(self):
         try:
             length = int(self.headers.get("content-length", 0))
@@ -29,8 +27,7 @@ class handler(BaseHTTPRequestHandler):
             data = json.loads(body)
             update = Update.de_json(data, APP.bot)
 
-            # process the update asynchronously
-            import asyncio
+            asyncio.run(APP.initialize())
             asyncio.run(APP.process_update(update))
 
             self.send_response(200)
@@ -43,7 +40,6 @@ class handler(BaseHTTPRequestHandler):
             self.wfile.write(str(e).encode())
 
     def do_GET(self):
-        """Health check — useful to verify the function is alive."""
         self.send_response(200)
         self.end_headers()
         self.wfile.write(b"eiin-bot webhook alive")
