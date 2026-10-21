@@ -13,7 +13,7 @@ from telegram.ext import (
 )
 
 # ═══════════ EDIT THESE TWO LINES ═══════════
-BOT_TOKEN = "PASTE_YOUR_BOT_TOKEN_HERE"     # from @BotFather
+BOT_TOKEN = "8426186448:AAHE4dkzYCaSkYdRuik83VXIlRx7eBk-96E"     # from @BotFather
 API_BASE  = "https://YOURDOMAIN.com/eiin.php" # public URL to your eiin.php
 # ════════════════════════════════════════════
 
