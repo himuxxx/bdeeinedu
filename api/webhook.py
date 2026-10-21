@@ -1,13 +1,11 @@
 # api/webhook.py
-# language: Python, runtime: Vercel Serverless (Python 3.12), target: webhook handler
 import os
 import sys
 import json
 import asyncio
 import logging
-from http.server import BaseHTTPRequestHandler
+from flask import Flask, request
 
-# make sibling bot_logic.py importable
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from telegram import Update
@@ -16,30 +14,26 @@ from bot_logic import build_application
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("vercel-webhook")
 
-APP = build_application()  # cold-start once, reuse across warm invocations
+APP = build_application()
+app = Flask(__name__)
 
+@app.route("/api/webhook", methods=["POST", "GET"])
+def webhook():
+    if request.method == "GET":
+        return "eiin-bot webhook alive", 200
 
-class handler(BaseHTTPRequestHandler):
-    def do_POST(self):
-        try:
-            length = int(self.headers.get("content-length", 0))
-            body = self.rfile.read(length).decode("utf-8")
-            data = json.loads(body)
-            update = Update.de_json(data, APP.bot)
-
-            asyncio.run(APP.initialize())
-            asyncio.run(APP.process_update(update))
-
-            self.send_response(200)
-            self.end_headers()
-            self.wfile.write(b"ok")
-        except Exception as e:
-            log.exception("webhook failure")
-            self.send_response(500)
-            self.end_headers()
-            self.wfile.write(str(e).encode())
-
-    def do_GET(self):
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(b"eiin-bot webhook alive")
+    try:
+        data = request.get_json(force=True)
+        update = Update.de_json(data, APP.bot)
+        
+        # Run the async update processing
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(APP.initialize())
+        loop.run_until_complete(APP.process_update(update))
+        loop.close()
+        
+        return "ok", 200
+    except Exception as e:
+        log.exception("Webhook failed")
+        return str(e), 500
