@@ -4,9 +4,13 @@
     "api/webhook.py": {
       "memory": 1024,
       "maxDuration": 60
+    },
+    "api/eiin.php": {
+      "runtime": "vercel-php@0.9.0"
     }
   },
   "routes": [
-    { "src": "/api/webhook", "dest": "/api/webhook.py" }
+    { "src": "/api/webhook", "dest": "/api/webhook.py" },
+    { "src": "/api/eiin.php", "dest": "/api/eiin.php" }
   ]
 }
