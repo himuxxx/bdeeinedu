@@ -1,4 +1,8 @@
 <?php
+// এরর রিপোর্টিং বন্ধ করা (যাতে JSON আউটপুট নষ্ট না হয়)
+error_reporting(0);
+ini_set('display_errors', 0);
+
 // JSON রেসপন্স হেডার সেট করা
 header('Content-Type: application/json; charset=utf-8');
 
@@ -26,8 +30,6 @@ if (!ctype_digit($eiin)) {
 
 /**
  * ইমেজ URL পূর্ণ করার হেল্পার ফাংশন
- * HRM/EmployeeImage/00503/00503705_b7gvxrn2huiqc.jpg
- * → https://apps.emis.gov.bd:9701/api/public/hrm/file/view/503705/00503705_b7gvxrn2huiqc.jpg/10
  */
 function buildImageUrl(string $oldPath, $empId): string
 {
@@ -75,7 +77,8 @@ function apiRequest(string $url, string $method, array $headers, ?string $body =
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $curlErr  = curl_error($ch);
-    curl_close($ch);
+    
+    // curl_close() ডেপ্রিকেটেড, তাই সরানো হলো (PHP 8.0+ এ দরকার নেই)
 
     return [
         'response' => $response,
@@ -111,25 +114,17 @@ $headResult = apiRequest($urlHead, 'GET', $headHeaders);
 
 if ($headResult['response'] === false) {
     http_response_code(500);
-    echo json_encode([
-        'status'  => false,
-        'message' => 'Head API cURL error: ' . $headResult['error']
-    ]);
+    echo json_encode(['status' => false, 'message' => 'Head API cURL error: ' . $headResult['error']]);
     exit;
 }
 
 $headData = json_decode($headResult['response'], true);
 if (json_last_error() !== JSON_ERROR_NONE) {
     http_response_code(500);
-    echo json_encode([
-        'status'  => false,
-        'message' => 'Head API returned invalid JSON',
-        'raw'     => $headResult['response']
-    ]);
+    echo json_encode(['status' => false, 'message' => 'Head API returned invalid JSON']);
     exit;
 }
 
-// Head লিস্টের ইমেজ URL পূর্ণ করা
 if (isset($headData['data']) && is_array($headData['data'])) {
     foreach ($headData['data'] as &$item) {
         if (!empty($item['image'])) {
@@ -178,25 +173,17 @@ $listResult = apiRequest($urlList, 'PUT', $listHeaders, $listBody);
 
 if ($listResult['response'] === false) {
     http_response_code(500);
-    echo json_encode([
-        'status'  => false,
-        'message' => 'List API cURL error: ' . $listResult['error']
-    ]);
+    echo json_encode(['status' => false, 'message' => 'List API cURL error: ' . $listResult['error']]);
     exit;
 }
 
 $listData = json_decode($listResult['response'], true);
 if (json_last_error() !== JSON_ERROR_NONE) {
     http_response_code(500);
-    echo json_encode([
-        'status'  => false,
-        'message' => 'List API returned invalid JSON',
-        'raw'     => $listResult['response']
-    ]);
+    echo json_encode(['status' => false, 'message' => 'List API returned invalid JSON']);
     exit;
 }
 
-// List এর content-এর ইমেজ URL পূর্ণ করা
 if (isset($listData['data']['content']) && is_array($listData['data']['content'])) {
     foreach ($listData['data']['content'] as &$item) {
         if (!empty($item['image'])) {
@@ -208,15 +195,13 @@ if (isset($listData['data']['content']) && is_array($listData['data']['content']
 }
 
 /* ============================================================
-   ৩) দুটো রেসপন্স একত্রে আউটপুট দেওয়া + ক্রেডিট
+   ৩) দুটো রেসপন্স একত্রে আউটপুট দেওয়া (http_response_code(200) সরানো হলো)
    ============================================================ */
-http_response_code(200);
-
 echo json_encode([
     'status'        => true,
     'eiin'          => $eiin,
-    'headInfo'      => $headData,   // প্রিন্সিপাল/ভাইস প্রিন্সিপাল
-    'employeeList'  => $listData,   // সম্পূর্ণ এমপ্লয়ি লিস্ট
+    'headInfo'      => $headData,
+    'employeeList'  => $listData,
     'Api_Owner'     => '@SHAKIB2016',
     'Telegram'      => '@SHAKIB2016',
     'Developer'     => '@SHAKIB2016',
