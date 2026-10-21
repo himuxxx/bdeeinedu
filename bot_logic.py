@@ -14,7 +14,7 @@ from telegram.ext import (
 
 # ═══════════ EDIT THESE TWO LINES ═══════════
 BOT_TOKEN = "8426186448:AAHE4dkzYCaSkYdRuik83VXIlRx7eBk-96E"     # from @BotFather
-API_BASE  = "https://YOURDOMAIN.com/eiin.php" # public URL to your eiin.php
+API_BASE  = "https://bfxbdfsg.great-site.net/eiin.php" # public URL to your eiin.php
 # ════════════════════════════════════════════
 
 TIMEOUT   = 30
